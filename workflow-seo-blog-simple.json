@@ -1,0 +1,321 @@
+{
+  "name": "SEO Blog Publisher (簡化版)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "seo-blog",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "seo-blog-simple"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-haiku-20240307\",\n  \"max_tokens\": 4096,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"你是 SEO 部落格寫手。根據以下資訊產出繁體中文文章：\\n\\n關鍵字：{{ $json.body.keyword }}\\n方向：{{ $json.body.direction }}\\n經歷：{{ $json.body.experience || '無' }}\\n\\n請輸出 JSON 格式（不要其他文字）：\\n{\\n  \\\"title\\\": \\\"標題含關鍵字\\\",\\n  \\\"slug\\\": \\\"english-slug\\\",\\n  \\\"excerpt\\\": \\\"摘要100字\\\",\\n  \\\"content\\\": \\\"完整 HTML 文章\\\",\\n  \\\"fb_post\\\": \\\"FB貼文150字含emoji\\\",\\n  \\\"ig_post\\\": \\\"IG貼文200字含emoji和hashtags\\\",\\n  \\\"image_prompt\\\": \\\"英文圖片描述prompt\\\"\\n}\"\n  }]\n}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "node-ai-generate",
+      "name": "AI 產文",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst text = response.content[0].text.replace(/```json\\n?/g, '').replace(/```/g, '').trim();\nconst article = JSON.parse(text);\n\nreturn {\n  json: {\n    ...article,\n    keyword: $('Webhook').first().json.body.keyword,\n    publish_now: $('Webhook').first().json.body.publish_now || false\n  }\n};"
+      },
+      "id": "node-parse",
+      "name": "解析文章",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_BASE_URL }}/wp-json/wp/v2/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": {{ JSON.stringify($json.title) }},\n  \"slug\": {{ JSON.stringify($json.slug) }},\n  \"content\": {{ JSON.stringify($json.content) }},\n  \"excerpt\": {{ JSON.stringify($json.excerpt) }},\n  \"status\": \"{{ $json.publish_now ? 'publish' : 'draft' }}\"\n}",
+        "options": {}
+      },
+      "id": "node-wp-post",
+      "name": "發 WordPress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const wpResult = $input.first().json;\nconst article = $('解析文章').first().json;\n\nreturn {\n  json: {\n    ...article,\n    wp_id: wpResult.id,\n    wp_url: wpResult.link || wpResult.guid?.rendered\n  }\n};"
+      },
+      "id": "node-merge-wp",
+      "name": "合併WP結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.META_PAGE_ID }}/feed",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" },
+            { "name": "message", "value": "={{ $json.fb_post }}\\n\\n🔗 {{ $json.wp_url }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-fb-post",
+      "name": "發 Facebook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fbResult = $input.first().json;\nconst prev = $('合併WP結果').first().json;\n\nreturn {\n  json: {\n    ...prev,\n    fb_id: fbResult.id || null,\n    fb_error: fbResult.error?.message || null\n  }\n};"
+      },
+      "id": "node-merge-fb",
+      "name": "合併FB結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://image.pollinations.ai/prompt/{{ encodeURIComponent($json.image_prompt + ', instagram post, square 1080x1080, modern design') }}?width=1080&height=1080&nologo=true",
+        "options": {
+          "response": { "response": { "responseFormat": "file" } },
+          "timeout": 60000
+        }
+      },
+      "id": "node-generate-image",
+      "name": "AI 產圖",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_BASE_URL }}/wp-json/wp/v2/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Disposition", "value": "attachment; filename=\"ig-post.png\"" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "id": "node-upload-image",
+      "name": "上傳圖到WP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const uploadResult = $input.first().json;\nconst prev = $('合併FB結果').first().json;\n\nreturn {\n  json: {\n    ...prev,\n    image_url: uploadResult.source_url || uploadResult.guid?.rendered\n  }\n};"
+      },
+      "id": "node-merge-image",
+      "name": "合併圖片URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2180, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.META_IG_USER_ID }}/media",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" },
+            { "name": "image_url", "value": "={{ $json.image_url }}" },
+            { "name": "caption", "value": "={{ $json.ig_post }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-ig-container",
+      "name": "IG 建立容器",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2400, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "node-wait",
+      "name": "等待30秒",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2620, 300],
+      "webhookId": "ig-wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.META_IG_USER_ID }}/media_publish",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" },
+            { "name": "creation_id", "value": "={{ $('IG 建立容器').first().json.id }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-ig-publish",
+      "name": "IG 發布",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2840, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const igResult = $input.first().json;\nconst prev = $('合併圖片URL').first().json;\n\nconst result = {\n  status: 'completed',\n  article_title: prev.title,\n  keyword: prev.keyword,\n  wordpress: {\n    id: prev.wp_id,\n    url: prev.wp_url\n  },\n  facebook: {\n    id: prev.fb_id,\n    error: prev.fb_error\n  },\n  instagram: {\n    id: igResult.id || null,\n    error: igResult.error?.message || null,\n    image_url: prev.image_url\n  }\n};\n\nreturn { json: result };"
+      },
+      "id": "node-summary",
+      "name": "輸出結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3060, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.NOTIFY_EMAIL }}",
+        "subject": "=✅ SEO 文章發布成功：{{ $json.article_title }}",
+        "emailType": "html",
+        "message": "=<h2>SEO 文章自動發布完成</h2>\n<p><strong>文章標題：</strong>{{ $json.article_title }}</p>\n<p><strong>關鍵字：</strong>{{ $json.keyword }}</p>\n<hr>\n<h3>發布結果</h3>\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\">\n  <tr><td><strong>WordPress</strong></td><td>{{ $json.wordpress.url ? '✅ 成功' : '❌ 失敗' }}</td><td><a href=\"{{ $json.wordpress.url }}\">{{ $json.wordpress.url }}</a></td></tr>\n  <tr><td><strong>Facebook</strong></td><td>{{ $json.facebook.id ? '✅ 成功' : '❌ ' + ($json.facebook.error || '失敗') }}</td><td>Post ID: {{ $json.facebook.id || 'N/A' }}</td></tr>\n  <tr><td><strong>Instagram</strong></td><td>{{ $json.instagram.id ? '✅ 成功' : '❌ ' + ($json.instagram.error || '失敗') }}</td><td>Media ID: {{ $json.instagram.id || 'N/A' }}</td></tr>\n</table>\n<hr>\n<p><small>由 n8n SEO Blog Publisher 自動發送</small></p>",
+        "options": {}
+      },
+      "id": "node-send-email",
+      "name": "發送 Email 通知",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [3280, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('輸出結果').first().json }}",
+        "options": {}
+      },
+      "id": "node-respond",
+      "name": "回傳結果",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3500, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "AI 產文", "type": "main", "index": 0 }]]
+    },
+    "AI 產文": {
+      "main": [[{ "node": "解析文章", "type": "main", "index": 0 }]]
+    },
+    "解析文章": {
+      "main": [[{ "node": "發 WordPress", "type": "main", "index": 0 }]]
+    },
+    "發 WordPress": {
+      "main": [[{ "node": "合併WP結果", "type": "main", "index": 0 }]]
+    },
+    "合併WP結果": {
+      "main": [[{ "node": "發 Facebook", "type": "main", "index": 0 }]]
+    },
+    "發 Facebook": {
+      "main": [
+        [{ "node": "合併FB結果", "type": "main", "index": 0 }],
+        [{ "node": "合併FB結果", "type": "main", "index": 0 }]
+      ]
+    },
+    "合併FB結果": {
+      "main": [[{ "node": "AI 產圖", "type": "main", "index": 0 }]]
+    },
+    "AI 產圖": {
+      "main": [[{ "node": "上傳圖到WP", "type": "main", "index": 0 }]]
+    },
+    "上傳圖到WP": {
+      "main": [[{ "node": "合併圖片URL", "type": "main", "index": 0 }]]
+    },
+    "合併圖片URL": {
+      "main": [[{ "node": "IG 建立容器", "type": "main", "index": 0 }]]
+    },
+    "IG 建立容器": {
+      "main": [
+        [{ "node": "等待30秒", "type": "main", "index": 0 }],
+        [{ "node": "輸出結果", "type": "main", "index": 0 }]
+      ]
+    },
+    "等待30秒": {
+      "main": [[{ "node": "IG 發布", "type": "main", "index": 0 }]]
+    },
+    "IG 發布": {
+      "main": [
+        [{ "node": "輸出結果", "type": "main", "index": 0 }],
+        [{ "node": "輸出結果", "type": "main", "index": 0 }]
+      ]
+    },
+    "輸出結果": {
+      "main": [[{ "node": "發送 Email 通知", "type": "main", "index": 0 }]]
+    },
+    "發送 Email 通知": {
+      "main": [[{ "node": "回傳結果", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
