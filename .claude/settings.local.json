@@ -6,7 +6,9 @@
       "Bash(docker restart:*)",
       "Bash(timeout:*)",
       "Bash(docker image inspect:*)",
-      "Bash(docker pull:*)"
+      "Bash(docker pull:*)",
+      "Bash(node -c:*)",
+      "Bash(node check-workflow.js:*)"
     ]
   }
 }

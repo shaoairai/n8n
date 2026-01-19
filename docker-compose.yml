@@ -9,11 +9,15 @@ services:
       - "5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
+      # 掛載本地 data 資料夾，方便放 Excel 檔案
+      - ./data:/home/node/data
     env_file:
       - config.env
     environment:
       - GENERIC_TIMEZONE=Asia/Taipei
       - TZ=Asia/Taipei
+      # 允許節點存取環境變數 (n8n 2.0+ 預設禁止)
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
 
 volumes:
   n8n_data:

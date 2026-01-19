@@ -1,0 +1,409 @@
+{
+  "name": "部落格自動產文 v2",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-trigger",
+      "name": "手動觸發",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "options": {}
+      },
+      "id": "node-read-gsheet",
+      "name": "讀取 Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [220, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheet-credential",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "filter-ready",
+              "leftValue": "={{ $json['狀態'] }}",
+              "rightValue": "待處理",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-filter",
+      "name": "篩選待處理",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "maxItems": 1,
+        "options": {}
+      },
+      "id": "node-first-item",
+      "name": "只取第一筆",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "check-has-data",
+              "leftValue": "={{ $json['關鍵字'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-check-data",
+      "name": "檢查有資料",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 無待處理資料時的輸出\nreturn [{\n  json: {\n    status: 'no_data',\n    message: '沒有待處理的文章'\n  }\n}];"
+      },
+      "id": "node-no-data",
+      "name": "無資料輸出",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 500]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# ROLE\n你是 10 年經驗的 SEO 編輯，只說繁體中文。\n\n# INPUT\n- 關鍵字: {{ $json['關鍵字'] }}\n- 標題: {{ $json['標題'] || $json['關鍵字'] }}\n- 方向: {{ $json['方向'] || '無' }}\n- 個人經驗/素材: {{ $json['素材'] || '無' }}\n\n# RULES\n1. 遵循 E-E-A-T 原則，展現專業與可信度\n2. 若有提供「個人經驗/素材」，必須自然融入文章中，增加真實感\n3. 段落 2-4 句，每 300 字換一個 H2\n4. 自然融入關鍵字，同段不超過 2 次\n5. 若有列舉用 <ul>，比較用 <table>\n6. 結尾加 FAQ（至少 3 題）和 CTA\n7. 標點用全形，中英數之間不加空格\n\n# OUTPUT STRUCTURE\n1. 開場段落（痛點 + 解決方案預告）\n2. TL;DR 摘要（3-5 點 <ul>）\n3. H2/H3 章節內容（800+ 字）\n4. FAQ 區塊（用 <details><summary>問題</summary>答案</details>）\n5. CTA 段落\n\n# JSON OUTPUT\n{\n  \"title\": \"含關鍵字的 SEO 標題\",\n  \"slug\": \"english-slug\",\n  \"content\": \"純 HTML 文章（<h2><p><ul><table><details> 等）\",\n  \"excerpt\": \"SEO 摘要 100-150 字\",\n  \"image_prompt\": \"English image description for AI generation, professional modern style\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "id": "node-ai-agent",
+      "name": "Claude 產文",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {
+          "maxTokensToSample": 4096
+        }
+      },
+      "id": "node-claude-model",
+      "name": "Claude Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [1020, 540],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-credential",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"title\": { \"type\": \"string\", \"description\": \"SEO 標題\" },\n    \"slug\": { \"type\": \"string\", \"description\": \"英文網址\" },\n    \"excerpt\": { \"type\": \"string\", \"description\": \"SEO 摘要\" },\n    \"content\": { \"type\": \"string\", \"description\": \"HTML 文章內容\" },\n    \"image_prompt\": { \"type\": \"string\", \"description\": \"圖片生成提示詞\" }\n  },\n  \"required\": [\"title\", \"slug\", \"excerpt\", \"content\", \"image_prompt\"]\n}"
+      },
+      "id": "node-output-parser",
+      "name": "JSON 格式化",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [1180, 540]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 整理 AI 產出的文章資料\nconst output = $json.output;\nconst original = $('只取第一筆').first().json;\n\nreturn [{\n  json: {\n    article: output,\n    original: {\n      keyword: original['關鍵字'],\n      title: original['標題'] || '',\n      row_number: original['row_number'] || ''\n    }\n  }\n}];"
+      },
+      "id": "node-merge-article",
+      "name": "整理文章資料",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a professional blog featured image: {{ $json.article.image_prompt }}. Style: modern, clean, professional business aesthetic, 1200x630 pixels, suitable for blog header.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"image\", \"text\"]\n  }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "node-gemini-image",
+      "name": "Gemini 產圖",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1620, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 從 Gemini 回應取得 base64 圖片\nconst response = $input.first().json;\nconst article = $('整理文章資料').first().json;\n\nlet base64Image = null;\nlet mimeType = 'image/png';\n\n// 解析 Gemini 回應結構\nif (response.candidates && response.candidates[0]) {\n  const parts = response.candidates[0].content.parts;\n  for (const part of parts) {\n    if (part.inlineData) {\n      base64Image = part.inlineData.data;\n      mimeType = part.inlineData.mimeType || 'image/png';\n      break;\n    }\n  }\n}\n\nif (!base64Image) {\n  throw new Error('Gemini 未回傳圖片');\n}\n\n// 轉換成 n8n binary 格式\nconst binaryData = Buffer.from(base64Image, 'base64');\nconst extension = mimeType.split('/')[1] || 'png';\nconst fileName = `${article.article.slug}-featured.${extension}`;\n\nreturn [{\n  json: {\n    article: article.article,\n    original: article.original,\n    image: {\n      fileName: fileName,\n      mimeType: mimeType,\n      size: binaryData.length\n    }\n  },\n  binary: {\n    image: {\n      data: base64Image,\n      mimeType: mimeType,\n      fileName: fileName\n    }\n  }\n}];"
+      },
+      "id": "node-convert-image",
+      "name": "轉換圖片格式",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, 300]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "name": "={{ $json.image.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_DRIVE_FOLDER_ID }}"
+        },
+        "options": {}
+      },
+      "id": "node-gdrive-upload",
+      "name": "上傳 Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2060, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "gdrive-credential",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-gdrive-share",
+      "name": "設定公開",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2280, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "gdrive-credential",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 整理資料準備上傳 WordPress\nconst gdriveResult = $input.first().json;\nconst imageData = $('轉換圖片格式').first();\nconst article = imageData.json.article;\nconst original = imageData.json.original;\n\n// Google Drive 公開連結\nconst gdriveFileId = $('上傳 Google Drive').first().json.id;\nconst gdriveUrl = `https://drive.google.com/uc?id=${gdriveFileId}&export=download`;\n\nreturn [{\n  json: {\n    article: article,\n    original: original,\n    gdrive: {\n      fileId: gdriveFileId,\n      url: gdriveUrl\n    }\n  },\n  binary: imageData.binary\n}];"
+      },
+      "id": "node-prepare-wp",
+      "name": "準備 WP 上傳",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_BASE_URL }}/wp-json/wp/v2/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $json.article.slug }}-featured.png\""
+            },
+            {
+              "name": "Content-Type",
+              "value": "={{ $binary.image.mimeType }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "image",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "node-wp-upload-media",
+      "name": "上傳圖到 WP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2720, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 合併 WP Media 結果\nconst wpMedia = $input.first().json;\nconst prevData = $('準備 WP 上傳').first().json;\n\nreturn [{\n  json: {\n    article: prevData.article,\n    original: prevData.original,\n    gdrive: prevData.gdrive,\n    wp_media: {\n      id: wpMedia.id,\n      url: wpMedia.source_url || wpMedia.guid?.rendered\n    }\n  }\n}];"
+      },
+      "id": "node-merge-wp-media",
+      "name": "合併 Media 結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2940, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WP_BASE_URL }}/wp-json/wp/v2/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": {{ JSON.stringify($json.article.title) }},\n  \"slug\": {{ JSON.stringify($json.article.slug) }},\n  \"content\": {{ JSON.stringify($json.article.content) }},\n  \"excerpt\": {{ JSON.stringify($json.article.excerpt) }},\n  \"status\": \"draft\",\n  \"featured_media\": {{ $json.wp_media.id }}\n}",
+        "options": {}
+      },
+      "id": "node-wp-create-post",
+      "name": "建立 WP 草稿",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3160, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 最終輸出摘要\nconst wpPost = $input.first().json;\nconst prevData = $('合併 Media 結果').first().json;\n\n// 取得 WP base URL\nlet editUrl = null;\ntry {\n  if (wpPost.link) {\n    const wpBaseUrl = new URL(wpPost.link).origin;\n    editUrl = `${wpBaseUrl}/wp-admin/post.php?post=${wpPost.id}&action=edit`;\n  }\n} catch(e) {}\n\nreturn [{\n  json: {\n    status: 'success',\n    message: '文章已建立為草稿',\n    title: prevData.article.title,\n    keyword: prevData.original.keyword,\n    wordpress: {\n      post_id: wpPost.id,\n      post_url: wpPost.link,\n      edit_url: editUrl,\n      featured_image: prevData.wp_media.url\n    },\n    gdrive_url: prevData.gdrive.url\n  }\n}];"
+      },
+      "id": "node-output",
+      "name": "輸出結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3380, 300]
+    }
+  ],
+  "connections": {
+    "手動觸發": {
+      "main": [[{ "node": "讀取 Google Sheets", "type": "main", "index": 0 }]]
+    },
+    "讀取 Google Sheets": {
+      "main": [[{ "node": "篩選待處理", "type": "main", "index": 0 }]]
+    },
+    "篩選待處理": {
+      "main": [[{ "node": "只取第一筆", "type": "main", "index": 0 }]]
+    },
+    "只取第一筆": {
+      "main": [[{ "node": "檢查有資料", "type": "main", "index": 0 }]]
+    },
+    "檢查有資料": {
+      "main": [
+        [{ "node": "Claude 產文", "type": "main", "index": 0 }],
+        [{ "node": "無資料輸出", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Model": {
+      "ai_languageModel": [[{ "node": "Claude 產文", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "JSON 格式化": {
+      "ai_outputParser": [[{ "node": "Claude 產文", "type": "ai_outputParser", "index": 0 }]]
+    },
+    "Claude 產文": {
+      "main": [[{ "node": "整理文章資料", "type": "main", "index": 0 }]]
+    },
+    "整理文章資料": {
+      "main": [[{ "node": "Gemini 產圖", "type": "main", "index": 0 }]]
+    },
+    "Gemini 產圖": {
+      "main": [[{ "node": "轉換圖片格式", "type": "main", "index": 0 }]]
+    },
+    "轉換圖片格式": {
+      "main": [[{ "node": "上傳 Google Drive", "type": "main", "index": 0 }]]
+    },
+    "上傳 Google Drive": {
+      "main": [[{ "node": "設定公開", "type": "main", "index": 0 }]]
+    },
+    "設定公開": {
+      "main": [[{ "node": "準備 WP 上傳", "type": "main", "index": 0 }]]
+    },
+    "準備 WP 上傳": {
+      "main": [[{ "node": "上傳圖到 WP", "type": "main", "index": 0 }]]
+    },
+    "上傳圖到 WP": {
+      "main": [[{ "node": "合併 Media 結果", "type": "main", "index": 0 }]]
+    },
+    "合併 Media 結果": {
+      "main": [[{ "node": "建立 WP 草稿", "type": "main", "index": 0 }]]
+    },
+    "建立 WP 草稿": {
+      "main": [[{ "node": "輸出結果", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

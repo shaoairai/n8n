@@ -1,0 +1,352 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"model\": \"gpt-4o\",\n    \"input\": \"{{ $json.output.delleprompt }}. Add bold Chinese text on the image: {{ $json.output.keyword }} — the text should be clearly visible, placed at the top or center of the image, using stylish, modern typography.\",\n    \"tools\": [\n      {\n  \"type\": \"image_generation\",\n  \"size\": \"1024x1024\",        \n  \"quality\": \"high\",       \n  \"output_format\": \"jpeg\",     \n  \"output_compression\": 80,          \n  \"background\": \"opaque\"\n}\n    ],\n    \"tool_choice\": {\n      \"type\": \"image_generation\"\n    }\n  }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        432,
+        304
+      ],
+      "id": "d9df77b2-c010-4bbc-baa8-43dba5b72d66",
+      "name": "生成圖片",
+      "credentials": {
+        "openAiApi": {
+          "id": "ahH6GnS2JZKgjMZU",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const base64String = $json[\"output\"][0][\"result\"];  // 你的 base64 字串來源\n\n// 建立 Buffer\nconst binaryData = Buffer.from(base64String, 'base64');\n\n// 計算大小（位元組 / KB / MB）\nconst byteSize = binaryData.length;\nconst kbSize = (byteSize / 1024).toFixed(2);\nconst mbSize = (byteSize / 1024 / 1024).toFixed(2);\n\n// 回傳 binary 資料與檔案大小資訊\nreturn [\n  {\n    binary: {\n      image: {\n        data: binaryData.toString('base64'),\n        mimeType: 'image/jpeg',\n        fileName: 'generated_image.jpeg'\n      }\n    },\n    json: {\n      byteSize: byteSize,\n      kbSize: kbSize,\n      mbSize: mbSize + ' MB'\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        304
+      ],
+      "id": "02b1fbd9-135c-4cf7-b54c-8724df3160ef",
+      "name": "轉換成jpg"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "image",
+        "name": "={{ $('生成圖片').item.json.output[0].revised_prompt }}{{ $('生成圖片').item.json.output[0].output_format }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1kNqcyJmxn1kWTD6F50Bic7P59LdHoJT5",
+          "mode": "list",
+          "cachedResultName": "圖片放置處",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1kNqcyJmxn1kWTD6F50Bic7P59LdHoJT5"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        928,
+        304
+      ],
+      "id": "ffef35a7-217b-44fa-b741-acf5c1dd6ac0",
+      "name": "Google Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "dCPr5UwBiGZFmONZ",
+          "name": "huber@ooschool.cc ForBubbleGoogle Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -240,
+        224
+      ],
+      "id": "0a2860b0-6aa3-4b7e-a97a-3149c6764742",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=你是 nSchool 職能學院的 Instagram 小編，負責製作每天的貼文，主題為「乾貨教學」、「產業趨勢」、「職涯轉職」、「技能學習」，目標是激發讀者對前端、後端、Python、AI 等課程的興趣，讓內容有趣、吸睛，像大學同學在聊天，激發轉發慾望。\n\n任務：根據以下網路文章，生成 Instagram 貼文內容、DALL·E 封面圖提示，並判斷文章的學習價值。請嚴格遵循以下規則，並輸出指定 JSON 格式。\n\n輸入資料：\n\n原標題: {{ $json['標題'] }}\n原文章內容: {{ $json['內容'] }}\n文章時間: {{ $json['文章時間'] }}\n\n規則:\n-\n內容處理（輸出在 \"content\"）：\n改寫文章為 IG 貼文風格，像大學同學在群組聊天，口語化、誇張、帶點耍寶感，用 emoji、問句、感嘆語氣，讓讀者一看就想轉發。\n不可抄襲，所有句子用自己的話重寫，移除所有出處（podcast、書名、作者、連結、訂閱等）。\n貼文要直接戳中文章的痛點（例如「學程式好難」「轉職怕失敗」）\n不管甚麼主題最後都鬼轉 CTA：「你是社會新鮮人?工作遇到瓶頸?想學習高薪技能?我們這邊有從0開始超適合新手的前後端工程、Python課程!留言一個 emoji，我私訊你免費課程！😎」。但你不要CTA我們沒有的領域，比如我們沒有Excel、英文的課程\n如果文章是條列式乾貨，開頭用 1️⃣2️⃣3️⃣ 排版，每點用簡短、吸睛的語句（例如「HTML：網頁骨架，超簡單！」）。\n結尾加 10 個 hashtag，例如 #技能學習 #工程師轉職 #職涯成長 #學程式 #轉職必備。\n語氣要年輕、像朋友喊話（例如「別再拖啦！」「3個月變大神！」），避免無聊的制式語句。\n-\n封面圖提示（輸出在 \"delleprompt\"）：\n為 DALL·E 生成 viral 封面圖提示\n風格類型-2D 扁平風（Flat Design）結合卡通插畫風，專業有設計感，吸引社群傳播\n主色調-明亮鮮豔的藍色系為主，搭配橘色、綠色、黃色點綴\n主角設計-可愛簡化人物，臉部輪廓乾淨、表情自然溫和\n情境-依造本次參考文章主題給出適合的插圖情境\n提示詞範例:cartoon-style 2D illustration with a tech-inspired background, featuring clean flat design, vibrant colors (especially blue, orange, green), futuristic UI elements, and floating data charts (bar, pie, line, scatter). The character is centered, working on a laptop, surrounded by digital data icons. The atmosphere feels modern, educational, and visually engaging.\n-\n是否為廣告（輸出在 \"ads\"）：\n如果文章是推薦外部資源（podcast、YouTube）或摘要，設為1。\n如果是純乾貨，設為0。\n-\n關鍵字判斷（輸出在 \"keyword\"）：\n從文章內容提取主要痛點（例如「學程式好難？」「轉職怕失敗？」）或目標（例如「快速入門？」「作品集超簡單？」）。\n圖片文字必須盡量減短 3~5 字，不能是專有名詞，或冷門詞彙，要帶問號，直接反映痛點或目標（例如「轉職好難？」「程式崩潰？」）。\n\n\n輸出格式json\n\n{\n  \"delleprompt\": \"string\",\n  \"content\": \"string\",\n  \"ads\": number,\n  \"keyword\": \"string\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        48,
+        304
+      ],
+      "id": "fb7afc3b-d17e-431c-bbf9-2f31524a3ad1",
+      "name": "AI Agent",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1FhMrAQ1QYx5_um-atT7XswDrBWHfveYdXPKgPvFo8mo",
+          "mode": "list",
+          "cachedResultName": "自動爬文",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FhMrAQ1QYx5_um-atT7XswDrBWHfveYdXPKgPvFo8mo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1633330820,
+          "mode": "list",
+          "cachedResultName": "104學習成長文章",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FhMrAQ1QYx5_um-atT7XswDrBWHfveYdXPKgPvFo8mo/edit#gid=1633330820"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "準備好AI轉換了?",
+              "lookupValue": "是"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -432,
+        224
+      ],
+      "id": "b7c5fe2d-e81b-4810-8e64-544120784b31",
+      "name": "是否AI生產?",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HXx6WYHhpf2KWc58",
+          "name": "huber@ooschool.cc Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "share",
+        "folderNoRootId": {
+          "__rl": true,
+          "value": "1o_N14HcPoEJ4EFgUY0LVYgIvoi6-1sa_",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1216,
+        304
+      ],
+      "id": "a1289897-b69d-44ee-8f62-3d84983b08c8",
+      "name": "Google Drive1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "dCPr5UwBiGZFmONZ",
+          "name": "huber@ooschool.cc ForBubbleGoogle Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        496
+      ],
+      "id": "f007d102-cea7-4a44-86b7-1d555ef44241",
+      "name": "OpenAI Chat Model5",
+      "credentials": {
+        "openAiApi": {
+          "id": "ahH6GnS2JZKgjMZU",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"delleprompt\": {\n      \"type\": \"string\"\n    },\n    \"content\": {\n      \"type\": \"string\"\n    },\n    \"ads\": {\n      \"type\": \"numbers\"\n    },\n    \"keyword\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\"delleprompt\", \"content\", \"ads\",\"keyword\"]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        256,
+        480
+      ],
+      "id": "b4805320-8149-470f-be03-f192f9a6b823",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        240
+      ],
+      "id": "ad190d03-5336-492d-9363-8e50cdaa242e",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "生成圖片": {
+      "main": [
+        [
+          {
+            "node": "轉換成jpg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "轉換成jpg": {
+      "main": [
+        [
+          {
+            "node": "Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "生成圖片",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否AI生產?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive1": {
+      "main": [
+        [
+          {
+            "node": "是否AI生產?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "是否AI生產?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "instanceId": "51ba2530c2f054f081efbd6b785ff7cc6806ab2e497e099d7033fc18e407934c"
+  },
+  "tags": []
+}
