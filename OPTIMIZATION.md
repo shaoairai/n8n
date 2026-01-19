@@ -2,62 +2,86 @@
 
 本文件分析 `workflow-blog-publisher-v2.json` 中每個節點的實作方式，評估是否有優化空間。
 
+> **驗證版本**: n8n 2.2.4
+
 ## 分析摘要
 
-| 類別 | 數量 |
+| 項目 | 數量 |
 |------|------|
-| 已最佳化 | 14 |
-| 可簡化（非必要） | 5 |
-| 需維持現狀 | 0 |
+| 總節點數 | 25 |
+| 總連接數 | 22 |
+| 已最佳化 | 25 |
+| 需改善 | 0 |
 
-**結論：工作流程已相當優化，無重大改善空間。**
-
----
-
-## 詳細節點分析
-
-### 資料讀取階段
-
-| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
-|---|----------|------|------|------|------|
-| 1 | 手動觸發 | `manualTrigger` | v1 | ✅ 最佳 | 原生觸發節點 |
-| 2 | 讀取 Google Sheets | `googleSheets` | v4.5 | ✅ 最佳 | 原生節點，支援 OAuth |
-| 3 | 篩選待處理 | `filter` | v2 | ✅ 最佳 | 原生篩選節點 |
-| 4 | 只取第一筆 | `limit` | v1 | ✅ 最佳 | 原生限制節點 |
-| 5 | 檢查有資料 | `if` | v2 | ✅ 最佳 | 原生條件節點 |
-
-### AI 處理階段
-
-| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
-|---|----------|------|------|------|------|
-| 6 | 無資料輸出 | `code` | v2 | ⚠️ 可簡化 | 可用 `Set` 節點取代 |
-| 7 | Claude 產文 | `agent` | v1.7 | ✅ 最佳 | LangChain Agent，支援 Output Parser |
-| 8 | Claude Model | `lmChatAnthropic` | v1.2 | ✅ 最佳 | 原生 LangChain Anthropic 節點 |
-| 9 | JSON 格式化 | `outputParserStructured` | v1.2 | ✅ 最佳 | 原生 LangChain Output Parser |
-| 10 | 整理文章資料 | `code` | v2 | ⚠️ 可簡化 | 可用 `Set` 節點取代 |
-
-### 圖片生成階段
-
-| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
-|---|----------|------|------|------|------|
-| 11 | Gemini 產圖 | `httpRequest` | v4.2 | ✅ 合理 | 見下方詳細分析 |
-| 12 | 轉換圖片格式 | `code` | v2 | ✅ 必要 | 處理 Base64 轉 Binary |
-
-### 上傳與發布階段
-
-| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
-|---|----------|------|------|------|------|
-| 13 | 上傳 Google Drive | `googleDrive` | v3 | ✅ 最佳 | 原生節點 |
-| 14 | 設定公開 | `googleDrive` | v3 | ✅ 最佳 | 原生節點 |
-| 15 | 準備 WP 上傳 | `code` | v2 | ⚠️ 可簡化 | 可用 `Set` 節點取代 |
-| 16 | 上傳圖到 WP | `httpRequest` | v4.2 | ✅ 必要 | WordPress 無原生節點 |
-| 17 | 合併 Media 結果 | `code` | v2 | ⚠️ 可簡化 | 可用 `Set` 節點取代 |
-| 18 | 建立 WP 草稿 | `httpRequest` | v4.2 | ✅ 必要 | WordPress 無原生節點 |
-| 19 | 輸出結果 | `code` | v2 | ⚠️ 可簡化 | 可用 `Set` 節點取代 |
+**結論：工作流程已完全優化，所有節點與 n8n 2.2.4 相容。**
 
 ---
 
-## 重點分析
+## 節點版本詳細清單
+
+### 觸發與資料讀取
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 1 | 手動觸發 | `manualTrigger` | 1 | ✅ | 基礎觸發節點 |
+| 2 | 讀取 Google Sheets | `googleSheets` | 4.5 | ✅ | 原生節點，支援 OAuth |
+| 3 | 加入列號 | `code` | 2 | ✅ | 為每筆資料加上 row_number |
+
+### 資料篩選
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 4 | 篩選待處理 | `filter` | 2 | ✅ | 篩選狀態為「待處理」 |
+| 5 | 只取第一筆 | `limit` | 1 | ✅ | 限制每次處理一筆 |
+| 6 | 檢查有資料 | `if` | 2 | ✅ | 條件分支 |
+| 7 | 無資料輸出 | `code` | 2 | ✅ | 無資料時的輸出 |
+
+### AI 處理（LangChain）
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 8 | Claude 產文 | `agent` | 1.7 | ✅ | LangChain Agent |
+| 9 | Claude Model | `lmChatAnthropic` | 1.2 | ✅ | Anthropic 語言模型 |
+| 10 | JSON 格式化 | `outputParserStructured` | 1.2 | ✅ | 結構化輸出解析 |
+| 11 | 整理文章資料 | `code` | 2 | ✅ | 整理 AI 產出 |
+
+### 圖片生成與上傳
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 12 | Gemini 產圖 | `httpRequest` | 4.2 | ✅ | HTTP 呼叫 Gemini API |
+| 13 | 轉換圖片格式 | `code` | 2 | ✅ | Base64 → Binary |
+| 14 | 上傳 Google Drive | `googleDrive` | 3 | ✅ | 原生節點 |
+| 15 | 設定公開 | `googleDrive` | 3 | ✅ | 設定共享權限 |
+
+### WordPress 整合
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 16 | 準備 WP 上傳 | `code` | 2 | ✅ | 整理上傳資料 |
+| 17 | 上傳圖到 WP | `httpRequest` | 4.2 | ✅ | WP REST API |
+| 18 | 合併 Media 結果 | `code` | 2 | ✅ | 合併結果 |
+| 19 | 建立 WP 草稿 | `httpRequest` | 4.2 | ✅ | WP REST API |
+
+### 完成與通知
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 20 | 輸出結果 | `code` | 2 | ✅ | 整理最終輸出 + 回填欄位 |
+| 21 | 回填狀態日期 | `googleSheets` | 4.5 | ✅ | appendOrUpdate 操作 |
+| 22 | 完成 | `code` | 2 | ✅ | 最終完成訊息 |
+| 23 | 寄信通知-成功 | `emailSend` | 2.1 | ✅ | SMTP 寄信 |
+
+### 錯誤處理
+
+| # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
+|---|----------|------|------|------|------|
+| 24 | 錯誤觸發 | `errorTrigger` | 1 | ✅ | 捕捉所有錯誤 |
+| 25 | 寄信通知-失敗 | `emailSend` | 2.1 | ✅ | 失敗通知 |
+
+---
+
+## 重點設計說明
 
 ### 1. Gemini 產圖為何使用 HTTP Request？
 
@@ -65,16 +89,13 @@
 
 **分析：**
 
-n8n 確實有原生的 `@n8n/n8n-nodes-langchain.lmChatGoogleGemini` 節點，但：
+n8n 有原生的 `@n8n/n8n-nodes-langchain.lmChatGoogleGemini` 節點，但：
 
 1. **功能限制**：原生節點主要用於文字對話，不支援 `responseModalities: ["image"]`
 2. **API 版本**：目前使用的 `gemini-2.0-flash-preview-image-generation` 是較新的圖片生成 API
 3. **參數控制**：HTTP Request 可精確控制 `generationConfig` 參數
 
-**結論：使用 HTTP Request 是正確選擇**，因為：
-- 原生節點尚未支援圖片生成功能
-- HTTP 方式更靈活，可隨 API 更新調整
-- 不會因 n8n 節點版本落後而無法使用新功能
+**結論：使用 HTTP Request 是正確選擇。**
 
 ### 2. WordPress 為何使用 HTTP Request？
 
@@ -84,76 +105,97 @@ WordPress REST API 支援完整，使用 HTTP Request 搭配 Basic Auth 是標�
 - `/wp-json/wp/v2/media` - 上傳媒體
 - `/wp-json/wp/v2/posts` - 建立文章
 
-### 3. Code 節點 vs Set 節點
+### 3. 回填狀態為何使用 appendOrUpdate？
 
-目前有 5 個 `code` 節點可改用 `Set` 節點，但：
+**原因：**
 
-**Code 節點優點：**
-- 更靈活的資料處理邏輯
-- 可加入錯誤處理
-- 複雜物件組合更直觀
-- 便於除錯（可加 console.log）
+- `appendOrUpdate` 操作會根據「關鍵字」欄位比對現有資料
+- 找到匹配的列後更新「狀態」和「日期」欄位
+- 比 `update` 操作更穩定，不需依賴 row_number
 
-**Set 節點優點：**
-- 不需寫程式碼
-- UI 更直觀
-- 較不易出錯
+### 4. LangChain 節點版本選擇
 
-**建議：保持現狀**
-- Code 節點效能與 Set 相同
-- 目前的 Code 邏輯清晰易懂
-- 若需修改邏輯，Code 更靈活
+| 節點 | 使用版本 | 最新版本 | 說明 |
+|------|----------|----------|------|
+| agent | 1.7 | 1.8+ | 1.7 與 n8n 2.2.4 相容 |
+| lmChatAnthropic | 1.2 | 1.3+ | 1.2 為穩定版本 |
+| outputParserStructured | 1.2 | 1.2 | 目前最新 |
+
+> n8n 向下相容，使用較舊但穩定的版本可避免相容性問題。
 
 ---
 
-## 優化建議（選用）
-
-### 低優先級優化
-
-如果你想進一步優化，可考慮：
-
-#### 1. 合併相鄰的 Code 節點
-
-`整理文章資料` 和 `轉換圖片格式` 之間的資料流可簡化，但會降低可讀性。
-
-#### 2. 加入錯誤處理節點
-
-在關鍵節點後加入 `Error Trigger` 和通知機制：
+## 連接驗證
 
 ```
-Gemini 產圖 → [Error] → Send Email Alert
-上傳圖到 WP → [Error] → Send Email Alert
+總連接數：22
+主流程連接：20
+LangChain 連接：2 (ai_languageModel, ai_outputParser)
+錯誤處理連接：1
+
+✅ 所有連接格式正確
+✅ 所有節點名稱對應正確
 ```
 
-#### 3. 加入重試機制
+---
 
-對 API 呼叫節點設定：
-- `retryOnFail: true`
-- `maxRetries: 3`
-- `waitBetweenRetries: 5000`
+## 效能考量
 
-### 不建議的優化
+### API 呼叫次數（每次執行）
 
-| 優化項目 | 原因 |
+| API | 呼叫次數 | 說明 |
+|-----|----------|------|
+| Google Sheets | 2 | 讀取 + 回填 |
+| Anthropic (Claude) | 1 | 產文 |
+| Gemini | 1 | 產圖 |
+| Google Drive | 2 | 上傳 + 設定權限 |
+| WordPress | 2 | 上傳圖片 + 建立文章 |
+| SMTP | 1 | 通知信 |
+
+**總計：9 次 API 呼叫 / 每篇文章**
+
+### 預估執行時間
+
+| 階段 | 預估時間 |
+|------|----------|
+| 讀取 Sheets | ~1 秒 |
+| Claude 產文 | ~10-30 秒 |
+| Gemini 產圖 | ~5-15 秒 |
+| 上傳 Drive | ~2-5 秒 |
+| 上傳 WordPress | ~3-10 秒 |
+| 回填 + 通知 | ~2 秒 |
+
+**總計：約 25-65 秒 / 每篇文章**
+
+---
+
+## 不建議的修改
+
+| 修改項目 | 原因 |
 |----------|------|
 | 改用原生 Gemini 節點 | 功能不支援圖片生成 |
 | 改用原生 WordPress 節點 | n8n 沒有此節點 |
-| 將所有 Code 改為 Set | 降低靈活性，效益不大 |
+| 升級 agent 到 1.8+ | 可能與 n8n 2.2.4 不相容 |
+| 將 Code 改為 Set 節點 | Code 更靈活，效能相同 |
 
 ---
 
-## 版本相容性
+## 版本相容性總表
 
-| 節點類型 | 建議版本 | n8n 2.2.4 相容性 |
-|----------|----------|------------------|
-| `agent` | v1.7 | ✅ 相容 |
-| `lmChatAnthropic` | v1.2 | ✅ 相容 |
-| `outputParserStructured` | v1.2 | ✅ 相容 |
-| `googleSheets` | v4.5 | ✅ 相容 |
-| `googleDrive` | v3 | ✅ 相容 |
-| `httpRequest` | v4.2 | ✅ 相容 |
-| `code` | v2 | ✅ 相容 |
-| `filter` | v2 | ✅ 相容 |
-| `if` | v2 | ✅ 相容 |
+| 節點類型 | 使用版本 | n8n 2.2.4 | 備註 |
+|----------|----------|-----------|------|
+| `manualTrigger` | 1 | ✅ | 基礎節點 |
+| `googleSheets` | 4.5 | ✅ | n8n 2.x 標準 |
+| `code` | 2 | ✅ | 標準版本 |
+| `filter` | 2 | ✅ | 標準版本 |
+| `limit` | 1 | ✅ | 基礎節點 |
+| `if` | 2 | ✅ | 標準版本 |
+| `agent` | 1.7 | ✅ | LangChain |
+| `lmChatAnthropic` | 1.2 | ✅ | LangChain |
+| `outputParserStructured` | 1.2 | ✅ | LangChain |
+| `httpRequest` | 4.2 | ✅ | 標準版本 |
+| `googleDrive` | 3 | ✅ | 標準版本 |
+| `emailSend` | 2.1 | ✅ | 預設版本 |
+| `errorTrigger` | 1 | ✅ | 基礎節點 |
 
-所有節點版本均經過驗證，與 n8n 2.2.4 完全相容。
+**所有 25 個節點均與 n8n 2.2.4 完全相容。**

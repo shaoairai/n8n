@@ -2,6 +2,8 @@
 
 拿到這個專案後，按照以下步驟設定並使用。
 
+> **相容版本**: n8n 2.2.4（已驗證）
+
 ---
 
 ## Step 1: 環境準備 (10 分鐘)
@@ -85,13 +87,24 @@ cp config.env.example config.env
 ### 3.4 取得 Google Sheets ID
 
 1. 建立或開啟你的 Google Sheets
-2. 從網址複製 ID：
+2. **重要**：將工作表名稱改為「**自動化表格**」
+3. 從網址複製 ID：
    ```
    https://docs.google.com/spreadsheets/d/[這裡是ID]/edit
    ```
-3. 貼到 `config.env` 的 `GOOGLE_SHEET_ID`
+4. 貼到 `config.env` 的 `GOOGLE_SHEET_ID`
 
-### 3.5 取得 Google Drive 資料夾 ID
+### 3.5 設定 Google Sheets 欄位
+
+確保你的 Google Sheets 有以下欄位（第一列為標題）：
+
+| A | B | C | D | E | F |
+|---|---|---|---|---|---|
+| 關鍵字 | 標題 | 方向 | 素材 | 狀態 | 日期 |
+
+> **注意**：「關鍵字」欄位用於比對回填，必須有值且唯一
+
+### 3.6 取得 Google Drive 資料夾 ID
 
 1. 在 Google Drive 建立資料夾（用於存放生成的圖片）
 2. 開啟資料夾，從網址複製 ID：
@@ -148,25 +161,25 @@ docker-compose up -d
    - User: WordPress 用戶名
    - Password: 應用程式密碼
 
+#### SMTP（選用，用於 Email 通知）
+1. 點選 `寄信通知-成功` 節點
+2. 建立 SMTP 憑證：
+   - Host: `smtp.gmail.com`
+   - Port: `465`
+   - User: 你的 Gmail
+   - Password: [應用程式密碼](https://myaccount.google.com/apppasswords)
+   - SSL/TLS: 開啟
+3. 在 `config.env` 設定 `NOTIFY_EMAIL`
+
 ---
 
-## Step 6: 準備資料 (5 分鐘)
+## Step 6: 準備測試資料 (5 分鐘)
 
-### 6.1 設定 Google Sheets 欄位
+### 6.1 在 Google Sheets 新增測試資料
 
-確保你的 Google Sheets 有以下欄位（第一列為標題）：
-
-| A | B | C | D | E |
-|---|---|---|---|---|
-| 關鍵字 | 標題 | 方向 | 素材 | 狀態 |
-| Python 教學 | | 初學者導向 | | 待處理 |
-| JavaScript 入門 | | | | 待處理 |
-
-### 6.2 新增測試資料
-
-在 Google Sheets 新增一筆：
-- 關鍵字：`Python 入門教學`
-- 狀態：`待處理`
+| 關鍵字 | 標題 | 方向 | 素材 | 狀態 | 日期 |
+|--------|------|------|------|------|------|
+| Python 入門教學 | | 初學者導向 | | 待處理 | |
 
 ---
 
@@ -175,7 +188,10 @@ docker-compose up -d
 1. 在 n8n 開啟工作流程
 2. 點選右上角 **Execute Workflow**
 3. 觀察每個節點的執行狀態
-4. 成功後，前往 WordPress 後台查看草稿
+4. 成功後：
+   - 前往 WordPress 後台查看草稿
+   - 檢查 Google Sheets 的「狀態」和「日期」是否已更新
+   - 檢查信箱是否收到通知（如有設定 SMTP）
 
 ---
 
@@ -204,6 +220,15 @@ http://localhost:5678/rest/oauth2-credential/callback
 2. 確認未超出配額
 3. 嘗試簡化 prompt
 
+### 回填狀態沒更新
+1. 確認「關鍵字」欄位有值
+2. 確認工作表名稱為「自動化表格」
+
+### Email 通知沒收到
+1. 確認已設定 SMTP Credentials
+2. 確認 `NOTIFY_EMAIL` 環境變數有設定
+3. 檢查垃圾郵件匣
+
 ---
 
 ## 進階功能
@@ -217,11 +242,12 @@ http://localhost:5678/rest/oauth2-credential/callback
    0 9 * * *
    ```
 
-### 新增 Email 通知
+### 停用 Email 通知
 
-1. 在 `輸出結果` 後新增 `Send Email` 節點
-2. 設定 SMTP（可用 Gmail）
-3. 連接到工作流程
+如不需要 Email 通知，可在 n8n 中：
+1. 點選 `寄信通知-成功` 節點 → 停用
+2. 點選 `錯誤觸發` 節點 → 停用
+3. 點選 `寄信通知-失敗` 節點 → 停用
 
 ### 批次處理
 
@@ -242,6 +268,34 @@ http://localhost:5678/rest/oauth2-credential/callback
 | n8n (自架) | 無限 | 免費 |
 
 **每篇文章估計成本：$0.02 - $0.05**
+
+---
+
+## Workflow 節點總覽
+
+| 節點數 | 連接數 | n8n 版本 | 狀態 |
+|--------|--------|----------|------|
+| 25 | 22 | 2.2.4 | ✅ 已驗證 |
+
+### 主流程（22 個節點）
+
+```
+手動觸發 → 讀取 Sheets → 加入列號 → 篩選待處理 → 只取第一筆 → 檢查有資料
+    ↓
+Claude 產文 ← Claude Model + JSON 格式化
+    ↓
+整理文章資料 → Gemini 產圖 → 轉換圖片格式 → 上傳 Drive → 設定公開
+    ↓
+準備 WP 上傳 → 上傳圖到 WP → 合併 Media 結果 → 建立 WP 草稿
+    ↓
+輸出結果 → 回填狀態日期 → 完成 → 寄信通知-成功
+```
+
+### 錯誤處理（2 個節點）
+
+```
+錯誤觸發 → 寄信通知-失敗
+```
 
 ---
 

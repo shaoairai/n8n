@@ -20,7 +20,7 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Sheet1"
+          "value": "自動化表格"
         },
         "options": {}
       },
@@ -35,6 +35,16 @@
           "name": "Google Sheets"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 為每筆資料加上 row_number (從第2列開始，因為第1列是標題)\nconst items = $input.all();\nreturn items.map((item, index) => ({\n  json: {\n    ...item.json,\n    row_number: index + 2\n  }\n}));"
+      },
+      "id": "node-add-row-number",
+      "name": "加入列號",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
     },
     {
       "parameters": {
@@ -63,7 +73,7 @@
       "name": "篩選待處理",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [660, 300]
     },
     {
       "parameters": {
@@ -74,7 +84,7 @@
       "name": "只取第一筆",
       "type": "n8n-nodes-base.limit",
       "typeVersion": 1,
-      "position": [660, 300]
+      "position": [880, 300]
     },
     {
       "parameters": {
@@ -103,7 +113,7 @@
       "name": "檢查有資料",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [880, 300]
+      "position": [1100, 300]
     },
     {
       "parameters": {
@@ -113,7 +123,7 @@
       "name": "無資料輸出",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 500]
+      "position": [1320, 500]
     },
     {
       "parameters": {
@@ -126,7 +136,7 @@
       "name": "Claude 產文",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
-      "position": [1100, 300]
+      "position": [1320, 300]
     },
     {
       "parameters": {
@@ -139,7 +149,7 @@
       "name": "Claude Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
       "typeVersion": 1.2,
-      "position": [1020, 540],
+      "position": [1240, 540],
       "credentials": {
         "anthropicApi": {
           "id": "anthropic-credential",
@@ -156,17 +166,17 @@
       "name": "JSON 格式化",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.2,
-      "position": [1180, 540]
+      "position": [1400, 540]
     },
     {
       "parameters": {
-        "jsCode": "// 整理 AI 產出的文章資料\nconst output = $json.output;\nconst original = $('只取第一筆').first().json;\n\nreturn [{\n  json: {\n    article: output,\n    original: {\n      keyword: original['關鍵字'],\n      title: original['標題'] || '',\n      row_number: original['row_number'] || ''\n    }\n  }\n}];"
+        "jsCode": "// 整理 AI 產出的文章資料\nconst output = $json.output;\nconst original = $('只取第一筆').first().json;\n\nreturn [{\n  json: {\n    article: output,\n    original: {\n      keyword: original['關鍵字'],\n      title: original['標題'] || '',\n      row_number: original['row_number']\n    }\n  }\n}];"
       },
       "id": "node-merge-article",
       "name": "整理文章資料",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1400, 300]
+      "position": [1620, 300]
     },
     {
       "parameters": {
@@ -183,7 +193,7 @@
       "name": "Gemini 產圖",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1620, 300]
+      "position": [1840, 300]
     },
     {
       "parameters": {
@@ -193,7 +203,7 @@
       "name": "轉換圖片格式",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1840, 300]
+      "position": [2060, 300]
     },
     {
       "parameters": {
@@ -215,7 +225,7 @@
       "name": "上傳 Google Drive",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [2060, 300],
+      "position": [2280, 300],
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "gdrive-credential",
@@ -244,7 +254,7 @@
       "name": "設定公開",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [2280, 300],
+      "position": [2500, 300],
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "gdrive-credential",
@@ -260,7 +270,7 @@
       "name": "準備 WP 上傳",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2500, 300]
+      "position": [2720, 300]
     },
     {
       "parameters": {
@@ -292,7 +302,7 @@
       "name": "上傳圖到 WP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2720, 300],
+      "position": [2940, 300],
       "credentials": {
         "httpBasicAuth": {
           "id": "wp-auth",
@@ -308,7 +318,7 @@
       "name": "合併 Media 結果",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2940, 300]
+      "position": [3160, 300]
     },
     {
       "parameters": {
@@ -325,7 +335,7 @@
       "name": "建立 WP 草稿",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3160, 300],
+      "position": [3380, 300],
       "credentials": {
         "httpBasicAuth": {
           "id": "wp-auth",
@@ -335,13 +345,109 @@
     },
     {
       "parameters": {
-        "jsCode": "// 最終輸出摘要\nconst wpPost = $input.first().json;\nconst prevData = $('合併 Media 結果').first().json;\n\n// 取得 WP base URL\nlet editUrl = null;\ntry {\n  if (wpPost.link) {\n    const wpBaseUrl = new URL(wpPost.link).origin;\n    editUrl = `${wpBaseUrl}/wp-admin/post.php?post=${wpPost.id}&action=edit`;\n  }\n} catch(e) {}\n\nreturn [{\n  json: {\n    status: 'success',\n    message: '文章已建立為草稿',\n    title: prevData.article.title,\n    keyword: prevData.original.keyword,\n    wordpress: {\n      post_id: wpPost.id,\n      post_url: wpPost.link,\n      edit_url: editUrl,\n      featured_image: prevData.wp_media.url\n    },\n    gdrive_url: prevData.gdrive.url\n  }\n}];"
+        "jsCode": "// 最終輸出摘要 - 包含回填 Google Sheets 所需的欄位\nconst wpPost = $input.first().json;\nconst prevData = $('合併 Media 結果').first().json;\n\n// 取得 WP base URL\nlet editUrl = null;\ntry {\n  if (wpPost.link) {\n    const wpBaseUrl = new URL(wpPost.link).origin;\n    editUrl = `${wpBaseUrl}/wp-admin/post.php?post=${wpPost.id}&action=edit`;\n  }\n} catch(e) {}\n\n// 台北時區的日期時間\nconst now = new Date();\nconst taipeiDate = now.toLocaleString('zh-TW', { \n  timeZone: 'Asia/Taipei',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit',\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: false\n}).replace(/\\//g, '-');\n\nreturn [{\n  json: {\n    // Google Sheets 更新用欄位（必須與試算表欄位名稱一致）\n    row_number: prevData.original.row_number,\n    狀態: '已完成',\n    日期: taipeiDate,\n    // 其他資訊\n    status: 'success',\n    message: '文章已建立為草稿',\n    title: prevData.article.title,\n    keyword: prevData.original.keyword,\n    wordpress: {\n      post_id: wpPost.id,\n      post_url: wpPost.link,\n      edit_url: editUrl,\n      featured_image: prevData.wp_media.url\n    },\n    gdrive_url: prevData.gdrive.url\n  }\n}];"
       },
       "id": "node-output",
       "name": "輸出結果",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3380, 300]
+      "position": [3600, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "自動化表格"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "關鍵字": "={{ $json.keyword }}",
+            "狀態": "={{ $json['狀態'] }}",
+            "日期": "={{ $json['日期'] }}"
+          }
+        },
+        "matchingColumns": ["關鍵字"],
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "node-update-gsheet",
+      "name": "回填狀態日期",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [3820, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheet-credential",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 最終完成訊息\nconst result = $('輸出結果').first().json;\n\nreturn [{\n  json: {\n    ...result,\n    sheet_updated: true,\n    completed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-final-output",
+      "name": "完成",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4040, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.NOTIFY_EMAIL }}",
+        "subject": "=部落格自動產文成功 - {{ $json.title }}",
+        "emailType": "text",
+        "message": "=文章已成功建立！\n\n關鍵字：{{ $json.keyword }}\n標題：{{ $json.title }}\n\nWordPress 連結：\n- 文章網址：{{ $json.wordpress.post_url }}\n- 編輯網址：{{ $json.wordpress.edit_url }}\n\nGoogle Drive 圖片：{{ $json.gdrive_url }}\n\n完成時間：{{ $json.completed_at }}"
+      },
+      "id": "node-email-success",
+      "name": "寄信通知-成功",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [4260, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ $json.error.message }}"
+      },
+      "id": "node-error-trigger",
+      "name": "錯誤觸發",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 600]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.NOTIFY_EMAIL }}",
+        "subject": "=部落格自動產文失敗 - {{ $now.setZone('Asia/Taipei').toFormat('yyyy-MM-dd HH:mm') }}",
+        "emailType": "text",
+        "message": "=工作流程執行失敗！\n\n錯誤訊息：{{ $json.execution.error.message }}\n\n失敗節點：{{ $json.execution.lastNodeExecuted }}\n\n執行 ID：{{ $json.execution.id }}\n\n請檢查 n8n 執行記錄了解詳情。"
+      },
+      "id": "node-email-error",
+      "name": "寄信通知-失敗",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [220, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
     }
   ],
   "connections": {
@@ -349,6 +455,9 @@
       "main": [[{ "node": "讀取 Google Sheets", "type": "main", "index": 0 }]]
     },
     "讀取 Google Sheets": {
+      "main": [[{ "node": "加入列號", "type": "main", "index": 0 }]]
+    },
+    "加入列號": {
       "main": [[{ "node": "篩選待處理", "type": "main", "index": 0 }]]
     },
     "篩選待處理": {
@@ -398,6 +507,18 @@
     },
     "建立 WP 草稿": {
       "main": [[{ "node": "輸出結果", "type": "main", "index": 0 }]]
+    },
+    "輸出結果": {
+      "main": [[{ "node": "回填狀態日期", "type": "main", "index": 0 }]]
+    },
+    "回填狀態日期": {
+      "main": [[{ "node": "完成", "type": "main", "index": 0 }]]
+    },
+    "完成": {
+      "main": [[{ "node": "寄信通知-成功", "type": "main", "index": 0 }]]
+    },
+    "錯誤觸發": {
+      "main": [[{ "node": "寄信通知-失敗", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
