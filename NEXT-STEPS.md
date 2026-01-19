@@ -255,6 +255,19 @@ http://localhost:5678/rest/oauth2-credential/callback
 1. 移除 `只取第一筆` 節點
 2. 加入 `Loop Over Items` 節點包裹處理邏輯
 
+### 自動重試機制
+
+「Claude 產文」節點已內建自動重試功能，當 AI 回傳格式錯誤時會自動重試：
+
+- 等待時間：5 秒
+- 重試次數：1 次
+- 重試仍失敗：觸發錯誤流程，寄送失敗通知信
+
+如需調整重試設定，可在 n8n 中：
+1. 點選 `Claude 產文` 節點
+2. 展開 **Settings**
+3. 調整 **Retry On Fail** 相關設定
+
 ---
 
 ## 成本估算

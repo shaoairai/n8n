@@ -40,7 +40,7 @@
 
 | # | 節點名稱 | 類型 | 版本 | 狀態 | 說明 |
 |---|----------|------|------|------|------|
-| 8 | Claude 產文 | `agent` | 1.7 | ✅ | LangChain Agent |
+| 8 | Claude 產文 | `agent` | 1.7 | ✅ | LangChain Agent + 自動重試 |
 | 9 | Claude Model | `lmChatAnthropic` | 1.2 | ✅ | Anthropic 語言模型 |
 | 10 | JSON 格式化 | `outputParserStructured` | 1.2 | ✅ | 結構化輸出解析 |
 | 11 | 整理文章資料 | `code` | 2 | ✅ | 整理 AI 產出 |
@@ -122,6 +122,32 @@ WordPress REST API 支援完整，使用 HTTP Request 搭配 Basic Auth 是標�
 | outputParserStructured | 1.2 | 1.2 | 目前最新 |
 
 > n8n 向下相容，使用較舊但穩定的版本可避免相容性問題。
+
+### 5. Claude 產文自動重試機制
+
+「Claude 產文」節點已設定自動重試，用於處理 AI 回傳格式錯誤的情況：
+
+```json
+{
+  "onError": "continueErrorOutput",
+  "retryOnFail": true,
+  "maxTries": 2,
+  "waitBetweenTries": 5000
+}
+```
+
+| 設定 | 值 | 說明 |
+|------|-----|------|
+| `retryOnFail` | `true` | 啟用失敗重試 |
+| `maxTries` | `2` | 最多執行 2 次（原始 + 重試 1 次） |
+| `waitBetweenTries` | `5000` | 等待 5 秒（5000ms）後重試 |
+| `onError` | `continueErrorOutput` | 重試仍失敗時繼續到錯誤輸出 |
+
+**重試流程：**
+1. 第一次執行失敗（例如 JSON 格式錯誤）
+2. 等待 5 秒
+3. 自動重試一次
+4. 若仍失敗 → 觸發「錯誤觸發」節點 → 寄送失敗通知信
 
 ---
 

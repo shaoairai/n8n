@@ -173,7 +173,7 @@ n8n/
 | 篩選待處理 | `filter` | 2 | 篩選狀態為「待處理」 |
 | 只取第一筆 | `limit` | 1 | 每次只處理一筆 |
 | 檢查有資料 | `if` | 2 | 確認有待處理資料 |
-| Claude 產文 | `agent` | 1.7 | 使用 Claude AI 生成文章 |
+| Claude 產文 | `agent` | 1.7 | 使用 Claude AI 生成文章（含自動重試） |
 | Claude Model | `lmChatAnthropic` | 1.2 | Claude 語言模型 |
 | JSON 格式化 | `outputParserStructured` | 1.2 | 解析 AI 輸出為 JSON |
 | 整理文章資料 | `code` | 2 | 整理 AI 產出資料 |
@@ -270,6 +270,22 @@ environment:
 - 寄信通知-成功
 - 錯誤觸發
 - 寄信通知-失敗
+
+### 自動重試機制
+
+「Claude 產文」節點已內建自動重試功能：
+
+| 設定 | 值 | 說明 |
+|------|-----|------|
+| `retryOnFail` | `true` | 啟用失敗重試 |
+| `maxTries` | `2` | 最多執行 2 次（原始 + 重試 1 次） |
+| `waitBetweenTries` | `5000` | 等待 5 秒後重試 |
+| `onError` | `continueErrorOutput` | 重試仍失敗時觸發錯誤流程 |
+
+當 Claude 回傳 JSON 格式錯誤時：
+1. 第一次失敗 → 等待 5 秒
+2. 自動重試一次
+3. 若仍失敗 → 觸發錯誤流程 → 寄送失敗通知信
 
 ## 版本相容性
 
