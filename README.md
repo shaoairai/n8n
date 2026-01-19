@@ -1,151 +1,199 @@
 # n8n SEO Blog Auto Publisher
 
-自動產出 SEO 部落格文章並發布到 WordPress、Facebook、Instagram，完成後發送 Email 通知。
+自動化 SEO 部落格發布工作流程，結合 AI 產文與產圖功能。
 
-## 流程
+## 功能概述
 
 ```
-Webhook 輸入 → AI 產文 → 發 WordPress → 發 Facebook → AI 產圖 → 發 Instagram → Email 通知
+Google Sheets → Claude AI 產文 → Gemini 產圖 → Google Drive → WordPress 草稿
 ```
 
-## 檔案說明
+- **讀取關鍵字**：從 Google Sheets 讀取待處理的 SEO 關鍵字
+- **AI 產文**：使用 Claude 生成符合 E-E-A-T 原則的 SEO 文章
+- **AI 產圖**：使用 Gemini 生成專業部落格封面圖
+- **自動上傳**：圖片上傳至 Google Drive 並設為公開
+- **建立草稿**：在 WordPress 建立文章草稿，含精選圖片
 
-| 檔案 | 用途 |
-|------|------|
-| `docker-compose.yml` | n8n Docker 設定 |
-| `config.env` | 環境變數（API Keys） |
-| `workflow-seo-blog-simple.json` | n8n Workflow（匯入用） |
-| `test-request.json` | 測試用範例請求 |
+## 系統需求
+
+- Docker & Docker Compose
+- Google Cloud 帳號（Sheets、Drive OAuth）
+- Anthropic API Key（Claude）
+- Google AI Studio API Key（Gemini）
+- WordPress 網站（需啟用 REST API）
 
 ## 快速開始
 
-### 1. 編輯 config.env
+### 1. 複製專案
 
-填入你的 API Keys：
+```bash
+git clone <your-repo-url>
+cd n8n
+```
+
+### 2. 設定環境變數
+
+複製並編輯設定檔：
+
+```bash
+cp config.env.example config.env
+```
+
+編輯 `config.env`，填入你的 API 金鑰：
 
 ```env
-# Anthropic API
+# Anthropic (Claude)
 ANTHROPIC_API_KEY=sk-ant-api03-xxxxxx
+
+# Google Gemini
+GEMINI_API_KEY=AIzaSyxxxxxx
+
+# Google Sheets ID
+GOOGLE_SHEET_ID=1ABC123xxxxxx
+
+# Google Drive 資料夾 ID
+GOOGLE_DRIVE_FOLDER_ID=1XYZ789xxxxxx
 
 # WordPress
 WP_BASE_URL=https://your-site.com
 WP_USERNAME=admin
-WP_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx
-
-# Meta (Facebook/Instagram)
-META_PAGE_ID=123456789012345
-META_IG_USER_ID=17841400000000000
-META_ACCESS_TOKEN=EAAxxxxxxxx
-
-# SMTP (Gmail)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=xxxx xxxx xxxx xxxx
+WP_APP_PASSWORD=xxxx xxxx xxxx xxxx
 ```
 
-### 2. 啟動 n8n
+### 3. 啟動 n8n
 
 ```bash
 docker-compose up -d
 ```
 
-### 3. 匯入 Workflow
+開啟瀏覽器：http://localhost:5678
 
-1. 打開 http://localhost:5678
-2. 建立帳號登入
-3. Workflows → Import from File → 選擇 `workflow-seo-blog-simple.json`
-4. 儲存並啟用
+### 4. 匯入工作流程
 
-### 4. 設定 Credentials
+1. 在 n8n 介面點選 **Workflows** → **Import from File**
+2. 選擇 `workflow-blog-publisher-v2.json`
+3. 設定各節點的 Credentials（見下方說明）
 
-在 n8n 中新增兩個 Credential：
+### 5. 準備 Google Sheets
 
-**WordPress Auth (HTTP Basic Auth)**
-- Name: `WordPress Auth`
-- User: 你的 WP_USERNAME
-- Password: 你的 WP_APP_PASSWORD
+建立 Google Sheets，包含以下欄位：
 
-**SMTP**
-- Name: `SMTP`
-- Host: smtp.gmail.com
-- Port: 465
-- User: 你的 Gmail
-- Password: Gmail 應用程式密碼
+| 欄位名稱 | 說明 | 範例 |
+|----------|------|------|
+| 關鍵字 | SEO 目標關鍵字 | `Python 入門教學` |
+| 標題 | 文章標題（選填） | `2024 Python 新手指南` |
+| 方向 | 內容方向（選填） | `針對完全零基礎的初學者` |
+| 素材 | 個人經驗/素材（選填） | `我自學 3 個月的心得...` |
+| 狀態 | 處理狀態 | `待處理` / `已完成` |
 
-### 5. 測試
+## Credentials 設定指南
 
-```bash
-curl -X POST http://localhost:5678/webhook/seo-blog \
-  -H "Content-Type: application/json" \
-  -d '{
-    "keyword": "n8n 自動化",
-    "direction": "針對行銷人員介紹自動化好處",
-    "publish_now": false
-  }'
+### Anthropic API
+
+1. 前往 [Anthropic Console](https://console.anthropic.com)
+2. 建立 API Key
+3. 在 n8n 建立 Credentials：**Anthropic API**
+
+### Google OAuth (Sheets & Drive)
+
+1. 前往 [Google Cloud Console](https://console.cloud.google.com)
+2. 建立專案並啟用 APIs：
+   - Google Sheets API
+   - Google Drive API
+3. 建立 OAuth 2.0 憑證（Web Application）
+4. 在 n8n 建立 Credentials：
+   - **Google Sheets OAuth2 API**
+   - **Google Drive OAuth2 API**
+
+### Gemini API
+
+1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. 建立 API Key
+3. 將 Key 填入 `config.env` 的 `GEMINI_API_KEY`
+
+### WordPress Application Password
+
+1. 登入 WordPress 後台
+2. 前往 **使用者** → **個人資料**
+3. 滾動到 **應用程式密碼**
+4. 輸入名稱，點選 **新增應用程式密碼**
+5. 複製產生的密碼（格式：`xxxx xxxx xxxx xxxx`）
+6. 在 n8n 建立 Credentials：**HTTP Basic Auth**
+   - User: WordPress 使用者名稱
+   - Password: 應用程式密碼
+
+## 檔案結構
+
+```
+n8n/
+├── README.md                        # 本文件
+├── OPTIMIZATION.md                  # 節點優化分析
+├── docker-compose.yml               # Docker 設定
+├── config.env                       # 環境變數（需自行填寫）
+├── workflow-blog-publisher-v2.json  # 主要工作流程
+├── check-workflow.js                # 工作流程驗證腳本
+└── data/                            # 資料目錄（掛載到容器）
 ```
 
-## Webhook 輸入參數
+## 工作流程節點說明
 
-| 參數 | 必填 | 說明 |
-|------|------|------|
-| `keyword` | ✅ | 主要關鍵字 |
-| `direction` | ✅ | 文章方向/受眾/語氣 |
-| `experience` | ❌ | 你的經歷素材（選填） |
-| `publish_now` | ❌ | `true`=發布, `false`=草稿 |
-
-## API 取得方式
-
-### Anthropic API Key
-1. https://console.anthropic.com
-2. Settings → API Keys → Create Key
-3. 新帳號有 $5 免費額度
-
-### WordPress 應用程式密碼
-1. WP 後台 → 使用者 → 編輯你的帳號
-2. 捲到「應用程式密碼」→ 新增
-3. 複製 24 字元密碼（含空格）
-
-### Meta Access Token
-1. https://developers.facebook.com → 建立應用程式
-2. 新增 Instagram Graph API
-3. Graph API Explorer → 取得 Page Access Token
-4. 需要權限：`pages_manage_posts`, `instagram_content_publish`
-
-### Meta IG User ID
-Graph API Explorer 查詢：
-```
-GET /{page-id}?fields=instagram_business_account
-```
-
-### Gmail 應用程式密碼
-1. https://myaccount.google.com/apppasswords
-2. 選擇「郵件」→「Windows 電腦」→ 產生
-3. 複製 16 字元密碼
-
-## 輸出結果
-
-成功後會收到 Email，內容包含：
-- WordPress 文章連結
-- Facebook 貼文 ID
-- Instagram 貼文 ID
-
-API 回傳範例：
-```json
-{
-  "status": "completed",
-  "article_title": "...",
-  "wordpress": { "id": 123, "url": "https://..." },
-  "facebook": { "id": "..." },
-  "instagram": { "id": "...", "image_url": "..." }
-}
-```
+| 節點 | 功能 |
+|------|------|
+| 手動觸發 | 手動執行工作流程 |
+| 讀取 Google Sheets | 從試算表讀取所有資料 |
+| 篩選待處理 | 篩選狀態為「待處理」的項目 |
+| 只取第一筆 | 每次只處理一筆資料 |
+| 檢查有資料 | 確認有待處理資料 |
+| Claude 產文 | 使用 Claude AI 生成 SEO 文章 |
+| Gemini 產圖 | 使用 Gemini 生成封面圖 |
+| 上傳 Google Drive | 圖片備份到 Drive |
+| 上傳圖到 WP | 圖片上傳到 WordPress Media |
+| 建立 WP 草稿 | 建立文章草稿 |
 
 ## 常見問題
 
-| 問題 | 解決方案 |
-|------|----------|
-| WP 401 Unauthorized | 確認應用程式密碼正確（含空格） |
-| Meta Token 失效 | Token 60 天過期，需重新取得 |
-| IG 發布失敗 | 確認 IG 是商業帳號且連結 FB Page |
-| Email 發送失敗 | 確認 Gmail 已開啟兩步驟驗證並產生應用程式密碼 |
+### Q: 出現 "access to env vars denied" 錯誤
+
+確認 `docker-compose.yml` 有加入：
+```yaml
+environment:
+  - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+```
+
+### Q: Google OAuth 無法連線
+
+1. 確認已在 Google Cloud Console 設定正確的 Redirect URI
+2. n8n 預設 Redirect URI: `http://localhost:5678/rest/oauth2-credential/callback`
+
+### Q: WordPress API 回傳 401
+
+1. 確認使用的是「應用程式密碼」而非登入密碼
+2. 確認 REST API 未被安全外掛封鎖
+
+### Q: Gemini 產圖失敗
+
+1. 確認 API Key 有效
+2. 確認帳號有啟用 Gemini API
+3. 檢查是否超出免費額度
+
+## 進階設定
+
+### 修改 AI Prompt
+
+編輯 `workflow-blog-publisher-v2.json` 中 `Claude 產文` 節點的 `text` 參數。
+
+### 修改圖片風格
+
+編輯 `Gemini 產圖` 節點的 `jsonBody` 中的 prompt。
+
+### 新增排程觸發
+
+將 `手動觸發` 節點替換為 `Schedule Trigger`，設定定時執行。
+
+## 授權
+
+MIT License
+
+## 貢獻
+
+歡迎提交 Issue 和 Pull Request！
