@@ -1,0 +1,395 @@
+{
+  "name": "社群媒體發文 (FB + IG)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-manual-trigger",
+      "name": "手動觸發",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.SOCIAL_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "社群發文"
+        },
+        "options": {}
+      },
+      "id": "node-read-gsheet",
+      "name": "讀取 Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [220, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheet-credential",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 篩選當日待發布的項目\nconst items = $input.all();\nconst today = new Date();\nconst todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD\n\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // 狀態必須是「待發布」\n  if (data['狀態'] !== '待發布') continue;\n  \n  // 檢查預定時間是否為當日\n  if (data['預定時間']) {\n    const timeStr = data['預定時間'].replace(/\\//g, '-');\n    const scheduledDate = timeStr.split(' ')[0]; // 取日期部分\n    if (scheduledDate !== todayStr) continue;\n  }\n  \n  results.push({ json: data });\n}\n\n// 只取第一筆\nreturn results.length > 0 ? [results[0]] : [];"
+      },
+      "id": "node-filter-today",
+      "name": "篩選當日待發布",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "check-has-data",
+              "leftValue": "={{ $json['圖片網址'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-check-data",
+      "name": "檢查有資料",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.FB_PAGE_ID }}/photos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json['圖片網址'] }}\",\n  \"message\": \"{{ $json['FB內文'] }}\",\n  \"published\": true\n}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-fb-post",
+      "name": "發文到 FB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 200],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "fb-oauth-credential",
+          "name": "Facebook Graph API"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.IG_BUSINESS_ACCOUNT_ID }}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_url\": \"{{ $json['圖片網址'] }}\",\n  \"caption\": \"{{ $json['IG內文'] }}\"\n}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-ig-container",
+      "name": "IG 建立容器",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 400],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "fb-oauth-credential",
+          "name": "Facebook Graph API"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// 處理 FB 結果並保留原始資料\nconst original = $('篩選當日待發布').first().json;\nconst fb = $input.first().json;\n\nreturn [{\n  json: {\n    ...original,\n    fb_success: !!(fb.id || fb.post_id),\n    fb_post_id: fb.id || fb.post_id || null,\n    fb_error: fb.error?.message || null\n  }\n}];"
+      },
+      "id": "node-fb-result",
+      "name": "FB 結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 處理 IG 容器結果\nconst original = $('篩選當日待發布').first().json;\nconst container = $input.first().json;\n\nconst hasContainer = !!container.id;\n\nreturn [{\n  json: {\n    ...original,\n    ig_container_id: container.id || null,\n    ig_error: container.error?.message || null,\n    ig_has_container: hasContainer\n  }\n}];"
+      },
+      "id": "node-ig-container-result",
+      "name": "IG 容器結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "check-container",
+              "leftValue": "={{ $json.ig_has_container }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-ig-check",
+      "name": "IG 容器成功？",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.IG_BUSINESS_ACCOUNT_ID }}/media_publish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"creation_id\": \"{{ $json.ig_container_id }}\"\n}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-ig-publish",
+      "name": "IG 發布",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "fb-oauth-credential",
+          "name": "Facebook Graph API"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// IG 發布結果\nconst prev = $('IG 容器結果').first().json;\nconst publish = $input.first().json;\n\nreturn [{\n  json: {\n    ...prev,\n    ig_success: !!publish.id,\n    ig_post_id: publish.id || null,\n    ig_error: publish.error?.message || prev.ig_error\n  }\n}];"
+      },
+      "id": "node-ig-result",
+      "name": "IG 發布結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// IG 容器失敗\nconst prev = $input.first().json;\n\nreturn [{\n  json: {\n    ...prev,\n    ig_success: false,\n    ig_post_id: null\n  }\n}];"
+      },
+      "id": "node-ig-failed",
+      "name": "IG 失敗",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 500]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "node-merge",
+      "name": "合併結果",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 整合最終結果\nconst items = $input.all();\n\nlet fbData = items.find(i => i.json.fb_success !== undefined)?.json;\nlet igData = items.find(i => i.json.ig_success !== undefined)?.json;\nlet original = fbData || igData;\n\nconst fb_success = fbData?.fb_success || false;\nconst ig_success = igData?.ig_success || false;\n\nconst now = new Date().toLocaleString('zh-TW', {\n  timeZone: 'Asia/Taipei',\n  year: 'numeric', month: '2-digit', day: '2-digit',\n  hour: '2-digit', minute: '2-digit', hour12: false\n}).replace(/\\//g, '-');\n\nreturn [{\n  json: {\n    keyword: original?.['關鍵字'] || '',\n    狀態: (fb_success && ig_success) ? '已發布' : '部分失敗',\n    發布時間: now,\n    all_success: fb_success && ig_success,\n    fb: { success: fb_success, id: fbData?.fb_post_id, error: fbData?.fb_error, text: original?.['FB內文'] },\n    ig: { success: ig_success, id: igData?.ig_post_id, error: igData?.ig_error, text: original?.['IG內文'] },\n    image: original?.['圖片網址']\n  }\n}];"
+      },
+      "id": "node-final",
+      "name": "整理結果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.SOCIAL_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "社群發文"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "關鍵字": "={{ $json.keyword }}",
+            "狀態": "={{ $json['狀態'] }}",
+            "發布時間": "={{ $json['發布時間'] }}"
+          }
+        },
+        "matchingColumns": ["關鍵字"],
+        "options": { "cellFormat": "USER_ENTERED" }
+      },
+      "id": "node-update-sheet",
+      "name": "回填狀態",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2420, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gsheet-credential",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.NOTIFY_EMAIL }}",
+        "subject": "=社群發文 {{ $json.all_success ? '成功' : '部分失敗' }} - {{ $json['發布時間'] }}",
+        "emailType": "text",
+        "message": "=社群發文結果\n==============\n\n📘 Facebook: {{ $json.fb.success ? '✅ 成功 (ID: ' + $json.fb.id + ')' : '❌ 失敗 - ' + $json.fb.error }}\n📷 Instagram: {{ $json.ig.success ? '✅ 成功 (ID: ' + $json.ig.id + ')' : '❌ 失敗 - ' + $json.ig.error }}\n\n圖片: {{ $json.image }}"
+      },
+      "id": "node-email",
+      "name": "寄送通知",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [2640, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "node-error-trigger",
+      "name": "錯誤觸發",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 600]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.NOTIFY_EMAIL }}",
+        "subject": "=社群發文錯誤 - {{ $now.setZone('Asia/Taipei').toFormat('MM-dd HH:mm') }}",
+        "emailType": "text",
+        "message": "=工作流程錯誤！\n\n錯誤：{{ $json.execution.error.message }}\n節點：{{ $json.execution.lastNodeExecuted }}"
+      },
+      "id": "node-error-email",
+      "name": "錯誤通知",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [220, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "手動觸發": {
+      "main": [[{ "node": "讀取 Google Sheets", "type": "main", "index": 0 }]]
+    },
+    "讀取 Google Sheets": {
+      "main": [[{ "node": "篩選當日待發布", "type": "main", "index": 0 }]]
+    },
+    "篩選當日待發布": {
+      "main": [[{ "node": "檢查有資料", "type": "main", "index": 0 }]]
+    },
+    "檢查有資料": {
+      "main": [
+        [
+          { "node": "發文到 FB", "type": "main", "index": 0 },
+          { "node": "IG 建立容器", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "發文到 FB": {
+      "main": [[{ "node": "FB 結果", "type": "main", "index": 0 }]]
+    },
+    "IG 建立容器": {
+      "main": [[{ "node": "IG 容器結果", "type": "main", "index": 0 }]]
+    },
+    "FB 結果": {
+      "main": [[{ "node": "合併結果", "type": "main", "index": 0 }]]
+    },
+    "IG 容器結果": {
+      "main": [[{ "node": "IG 容器成功？", "type": "main", "index": 0 }]]
+    },
+    "IG 容器成功？": {
+      "main": [
+        [{ "node": "IG 發布", "type": "main", "index": 0 }],
+        [{ "node": "IG 失敗", "type": "main", "index": 0 }]
+      ]
+    },
+    "IG 發布": {
+      "main": [[{ "node": "IG 發布結果", "type": "main", "index": 0 }]]
+    },
+    "IG 發布結果": {
+      "main": [[{ "node": "合併結果", "type": "main", "index": 1 }]]
+    },
+    "IG 失敗": {
+      "main": [[{ "node": "合併結果", "type": "main", "index": 1 }]]
+    },
+    "合併結果": {
+      "main": [[{ "node": "整理結果", "type": "main", "index": 0 }]]
+    },
+    "整理結果": {
+      "main": [[{ "node": "回填狀態", "type": "main", "index": 0 }]]
+    },
+    "回填狀態": {
+      "main": [[{ "node": "寄送通知", "type": "main", "index": 0 }]]
+    },
+    "錯誤觸發": {
+      "main": [[{ "node": "錯誤通知", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
